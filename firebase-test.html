@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>12s — Firestore connection test</title>
+<style>
+  body {
+    font-family: system-ui, sans-serif;
+    background: radial-gradient(120% 80% at 50% -10%, #1d4d57, #143642 55%, #0e272f);
+    color: #f5efe2; min-height: 100vh; margin: 0;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .card {
+    background: rgba(0,0,0,.2); border: 1px solid rgba(255,255,255,.12);
+    border-radius: 16px; padding: 28px; max-width: 440px; width: 100%;
+  }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  .sub { color: #9fb0b4; font-size: 13px; margin-bottom: 20px; }
+  .stat { font-size: 13px; margin: 6px 0; }
+  .stat b { color: #5fd9b0; }
+  .stat.err b { color: #e2603f; }
+  .counter {
+    font-size: 64px; font-weight: 800; text-align: center;
+    margin: 18px 0; letter-spacing: -.02em;
+  }
+  button {
+    width: 100%; font-size: 15px; font-weight: 600; color: #06231a;
+    background: #5fd9b0; border: none; border-radius: 10px;
+    padding: 12px; cursor: pointer;
+  }
+  button:hover { filter: brightness(1.05); }
+  button:disabled { opacity: .5; cursor: default; }
+  .hint { color: #9fb0b4; font-size: 12px; margin-top: 16px; line-height: 1.5; }
+  code { background: rgba(255,255,255,.08); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Firestore connection test</h1>
+    <div class="sub">Proves your config connects and syncs in real time.</div>
+
+    <div class="stat">Project: <b id="proj">…</b></div>
+    <div class="stat" id="connline">Status: <b id="conn">connecting…</b></div>
+
+    <div class="counter" id="count">—</div>
+
+    <button id="btn" disabled>Increment shared counter</button>
+
+    <div class="hint">
+      Open this same page in a <b>second tab</b> (or on your phone). Click the button in one —
+      the number should update in <b>both</b> within a moment. That confirms reads, writes, and
+      live sync all work. The value lives in a <code>test/counter</code> document in Firestore.
+    </div>
+  </div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
+  import {
+    getFirestore, doc, onSnapshot, setDoc, increment
+  } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDhFbe7ryOM1eOkMhcEmc1F0YAhPu1FcOw",
+    authDomain: "fir-game-d5f30.firebaseapp.com",
+    projectId: "fir-game-d5f30",
+    storageBucket: "fir-game-d5f30.firebasestorage.app",
+    messagingSenderId: "499744746065",
+    appId: "1:499744746065:web:eebb8fa17f0e37c2c52670"
+  };
+
+  const setConn = (msg, isErr) => {
+    const el = document.getElementById('conn');
+    el.textContent = msg;
+    document.getElementById('connline').className = 'stat' + (isErr ? ' err' : '');
+  };
+
+  let db;
+  try {
+    const app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+    document.getElementById('proj').textContent = firebaseConfig.projectId;
+  } catch (e) {
+    setConn('failed to initialize: ' + e.message, true);
+    throw e;
+  }
+
+  const ref = doc(db, 'test', 'counter');
+  const btn = document.getElementById('btn');
+  const countEl = document.getElementById('count');
+
+  // Live subscription — fires on every change, from this tab or any other.
+  onSnapshot(ref, (snap) => {
+    setConn('connected · live', false);
+    btn.disabled = false;
+    const v = snap.exists() ? (snap.data().value ?? 0) : 0;
+    countEl.textContent = v;
+  }, (err) => {
+    setConn('listen error: ' + err.message, true);
+  });
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      // increment() is atomic — safe even if both tabs click at once.
+      await setDoc(ref, { value: increment(1) }, { merge: true });
+    } catch (e) {
+      setConn('write error: ' + e.message, true);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

@@ -274,7 +274,7 @@ function placeOnBuilding(state, card, slotIndex) {
  * No same-turn redraw even if this empties the hand.
  * Returns { ok, error? }.
  */
-function discard(state, handIndex, pileIndex) {
+function discard(state, handIndex, pileIndex, autoDrawNext) {
   if (state.status !== 'active') return { ok: false, error: 'Game is not active.' };
 
   const player = currentPlayer(state);
@@ -288,15 +288,17 @@ function discard(state, handIndex, pileIndex) {
   const card = player.hand.splice(handIndex, 1)[0];
   player.discardPiles[pileIndex].push(card);
 
-  endTurn(state);
+  // autoDrawNext defaults true (local hot-seat). The networked layer passes
+  // false so the next player's draw happens on THEIR own device.
+  endTurn(state, autoDrawNext === undefined ? true : autoDrawNext);
   return { ok: true };
 }
 
-// Advance to the next player and draw them up to 5.
-function endTurn(state) {
+// Advance to the next player. Draw them up to 5 only when autoDraw is true.
+function endTurn(state, autoDraw) {
   state.currentTurnIndex = (state.currentTurnIndex + 1) % state.players.length;
   state.turnNumber += 1;
-  drawToFull(state);
+  if (autoDraw === undefined ? true : autoDraw) drawToFull(state);
 }
 
 /* ----------------------------------------------------------------------------
