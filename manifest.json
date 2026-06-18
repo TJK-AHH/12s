@@ -1,0 +1,15 @@
+{
+  "name": "12s",
+  "short_name": "12s",
+  "description": "Two-to-four player card game.",
+  "start_url": "game.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#143642",
+  "theme_color": "#143642",
+  "icons": [
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
