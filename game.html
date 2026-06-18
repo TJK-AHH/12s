@@ -509,6 +509,18 @@ const SFX = {
 function playSound(name) {
   try { const a = SFX[name]; a.currentTime = 0; a.play().catch(() => {}); } catch(e) {}
 }
+// iOS blocks audio until the first user gesture. On the first tap anywhere,
+// silently unlock all three audio elements so snapshot-triggered plays work.
+function _unlockAudio() {
+  Object.values(SFX).forEach(a => {
+    a.play().then(() => { a.pause(); a.currentTime = 0; }).catch(() => {});
+  });
+  document.removeEventListener('touchstart', _unlockAudio);
+  document.removeEventListener('click',      _unlockAudio);
+}
+document.addEventListener('touchstart', _unlockAudio, { once: true });
+document.addEventListener('click',      _unlockAudio, { once: true });
+
 let _prevTurnIndex = null, _prevStatus = null;
 
 /* ---------- screens ---------- */
@@ -757,15 +769,21 @@ function render() {
   const myTurn = isMyTurn();
 
   /* -- sound transitions -- */
-  const _justStarted  = _prevStatus !== 'active'  && state.status === 'active';
-  const _justFinished = _prevStatus !== 'finished' && state.status === 'finished';
-  const _myTurnNow    = state.currentTurnIndex === myIndex;
-  const _myTurnBefore = _prevTurnIndex === myIndex;
-  if (_justStarted)  playSound('start');
-  if (_justFinished) playSound('win');
-  if (_myTurnNow && !_myTurnBefore && state.status === 'active' && !_justStarted) playSound('turn');
-  _prevStatus    = state.status;
-  _prevTurnIndex = state.currentTurnIndex;
+  const _myTurnNow = state.currentTurnIndex === myIndex;
+  if (_prevTurnIndex === null) {
+    // First render after load — establish baseline without playing anything.
+    _prevStatus    = state.status;
+    _prevTurnIndex = state.currentTurnIndex;
+  } else {
+    const _justStarted  = _prevStatus !== 'active'  && state.status === 'active';
+    const _justFinished = _prevStatus !== 'finished' && state.status === 'finished';
+    const _myTurnBefore = _prevTurnIndex === myIndex;
+    if (_justStarted)  playSound('start');
+    if (_justFinished) playSound('win');
+    if (_myTurnNow && !_myTurnBefore && state.status === 'active' && !_justStarted) playSound('turn');
+    _prevStatus    = state.status;
+    _prevTurnIndex = state.currentTurnIndex;
+  }
   const sel = selectedCard(state);
 
   // turn flag
