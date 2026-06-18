@@ -1,39 +1,31 @@
 rules_version = '2';
-
 // 12s — Firestore security rules
 // Enforces: only the two players can touch their game, only the active player
 // can make a move, a waiting game is joinable by code, and each player's hand
 // is readable/writable only by that player.
-
 service cloud.firestore {
   match /databases/{database}/documents {
-
     function isSignedIn() {
       return request.auth != null;
     }
-
     match /games/{gameId} {
-
       // GET a single game: members always; a 'waiting' game is gettable by
       // anyone signed in who has the code (so they can join it).
       allow get: if isSignedIn() && (
         resource.data.status == 'waiting'
         || request.auth.uid in resource.data.playerUids
       );
-
       // LIST (queries): only your own games. This satisfies the
       // playerUids array-contains query used to find your active game, and
       // prevents listing other people's or all 'waiting' games.
       allow list: if isSignedIn()
         && request.auth.uid in resource.data.playerUids;
-
       // CREATE a new game: you are player 0, the only member, status 'waiting'.
       allow create: if isSignedIn()
         && request.resource.data.players[0].uid == request.auth.uid
         && request.resource.data.playerUids.size() == 1
         && request.auth.uid in request.resource.data.playerUids
         && request.resource.data.status == 'waiting';
-
       // UPDATE: either (a) joining a waiting game as player 1, or
       //                (b) a move written by the current active player.
       allow update: if isSignedIn() && (
@@ -48,7 +40,6 @@ service cloud.firestore {
           request.auth.uid == resource.data.players[resource.data.currentTurnIndex].uid
         )
       );
-
       // No client-side deletes.
       allow delete: if false;
 
@@ -65,6 +56,21 @@ service cloud.firestore {
         }
         allow read, write: if isSignedIn()
           && request.auth.uid == ownerUid();
+      }
+
+      // ---------- chat ----------
+      match /chat/{msgId} {
+        function isPlayer() {
+          return request.auth.uid in get(/databases/$(database)/documents/games/$(gameId)).data.playerUids;
+        }
+        // Both players can read all messages.
+        allow read: if isSignedIn() && isPlayer();
+        // Either player can post, but only as themselves.
+        allow create: if isSignedIn()
+          && isPlayer()
+          && request.resource.data.uid == request.auth.uid;
+        // No editing or deleting messages.
+        allow update, delete: if false;
       }
     }
   }

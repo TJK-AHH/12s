@@ -147,6 +147,86 @@
     .lobby h1 { font-size: 44px; }
   }
   @media (prefers-reduced-motion: reduce) { .card.wild, .target { animation: none; } }
+
+  /* ---------- Chat ---------- */
+  .chat-btn {
+    display: flex; align-items: center; gap: 6px;
+    font-family: var(--font-body); font-weight: 600; font-size: 13px;
+    color: var(--paper); background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.16); border-radius: 999px;
+    padding: 7px 14px; cursor: pointer; transition: background .12s;
+  }
+  .chat-btn:hover { background: rgba(255,255,255,.14); }
+  .chat-dot {
+    width: 9px; height: 9px; border-radius: 50%; background: var(--glow);
+    transition: background .2s;
+    flex-shrink: 0;
+  }
+  .chat-dot.red { background: var(--danger); }
+  .chat-dot.blink { animation: dotblink .6s ease-in-out; }
+  @keyframes dotblink {
+    0%   { background: var(--danger); }
+    50%  { background: var(--danger); }
+    100% { background: var(--glow); }
+  }
+
+  .chat-panel {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 200;
+    background: var(--table);
+    display: flex; flex-direction: column;
+    transform: translateY(-100%);
+    transition: transform .28s cubic-bezier(.4,0,.2,1);
+  }
+  .chat-panel.open { transform: translateY(0); }
+
+  .chat-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid rgba(255,255,255,.10);
+    flex-shrink: 0;
+  }
+  .chat-header h2 {
+    font-family: var(--font-display); font-weight: 700; font-size: 20px; margin: 0;
+  }
+  .chat-close {
+    font-family: var(--font-body); font-weight: 600; font-size: 13px;
+    color: var(--paper); background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.16); border-radius: 999px;
+    padding: 7px 14px; cursor: pointer;
+  }
+
+  .chat-messages {
+    flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .chat-empty { color: var(--ink-soft); font-size: 13px; text-align: center; margin-top: 24px; }
+
+  .chat-msg { display: flex; flex-direction: column; max-width: 78%; }
+  .chat-msg.mine { align-self: flex-end; align-items: flex-end; }
+  .chat-msg.theirs { align-self: flex-start; align-items: flex-start; }
+  .chat-bubble {
+    padding: 9px 13px; border-radius: 16px; font-size: 14px; line-height: 1.4;
+    word-break: break-word;
+  }
+  .chat-msg.mine .chat-bubble { background: var(--glow); color: #06231a; border-bottom-right-radius: 4px; }
+  .chat-msg.theirs .chat-bubble { background: rgba(255,255,255,.12); color: var(--paper); border-bottom-left-radius: 4px; }
+  .chat-meta { font-size: 10px; color: var(--ink-soft); margin-top: 3px; }
+
+  .chat-compose {
+    display: flex; gap: 8px; padding: 12px 16px;
+    border-top: 1px solid rgba(255,255,255,.10); flex-shrink: 0;
+  }
+  .chat-input {
+    flex: 1; font-family: var(--font-body); font-size: 15px; color: var(--paper);
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
+    border-radius: 12px; padding: 11px 14px; outline: none;
+  }
+  .chat-input::placeholder { color: rgba(245,239,226,.35); }
+  .chat-send {
+    font-family: var(--font-body); font-weight: 700; font-size: 14px;
+    color: #06231a; background: var(--glow); border: none;
+    border-radius: 12px; padding: 11px 18px; cursor: pointer; white-space: nowrap;
+  }
+  .chat-send:disabled { opacity: .4; cursor: default; }
 </style>
 </head>
 <body>
@@ -210,7 +290,23 @@
 <div id="screen-table" class="wrap" style="display:none;">
   <div class="topbar">
     <div class="brand"><h1>12s</h1><span class="sub" id="table-code">—</span></div>
-    <div id="turnflag" class="turnflag"><span class="dot"></span><span id="turnflag-text">—</span></div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button class="chat-btn" id="btn-chat"><span class="chat-dot" id="chat-dot"></span>Chat</button>
+      <div id="turnflag" class="turnflag"><span class="dot"></span><span id="turnflag-text">—</span></div>
+    </div>
+  </div>
+
+  <!-- Chat panel -->
+  <div class="chat-panel" id="chat-panel">
+    <div class="chat-header">
+      <h2>Chat</h2>
+      <button class="chat-close" id="btn-chat-close">Close ✕</button>
+    </div>
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-compose">
+      <input class="chat-input" id="chat-input" placeholder="Type a message…" maxlength="300" />
+      <button class="chat-send" id="btn-chat-send">Send</button>
+    </div>
   </div>
   <div id="banner" class="banner" style="display:none;">
     <span><b id="banner-text">—</b></span>
@@ -249,7 +345,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
 import {
   getFirestore, doc, getDoc, setDoc, onSnapshot, writeBatch,
-  collection, query, where, getDocs
+  collection, query, where, getDocs, addDoc, orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 import {
   getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut
@@ -278,6 +374,131 @@ let curPub = null, myCards = [];
 let selection = null, expanded = new Set();
 let unsubPub = null, unsubHand = null;
 let drawInFlight = false;
+let unsubChat = null;
+let chatOpen = false;
+let chatMessages = [];   // [{id, uid, name, text, ts}]
+let lastReadTs = 0;      // ms timestamp of last message seen
+
+/* ---------- chat ---------- */
+const CHAT_READ_KEY = () => '12s.chatread.' + code;
+
+function loadLastRead() {
+  try { return parseInt(localStorage.getItem(CHAT_READ_KEY()) || '0', 10); } catch { return 0; }
+}
+function saveLastRead(ts) {
+  try { localStorage.setItem(CHAT_READ_KEY(), String(ts)); } catch {}
+}
+
+function openChat() {
+  chatOpen = true;
+  document.getElementById('chat-panel').classList.add('open');
+  // Mark all current messages as read
+  if (chatMessages.length) {
+    const latest = chatMessages[chatMessages.length - 1].ts || 0;
+    if (latest > lastReadTs) { lastReadTs = latest; saveLastRead(latest); }
+  }
+  updateChatDot();
+  renderChatMessages();
+  // Scroll to bottom
+  const m = document.getElementById('chat-messages');
+  setTimeout(() => { m.scrollTop = m.scrollHeight; }, 30);
+}
+
+function closeChat() {
+  chatOpen = false;
+  document.getElementById('chat-panel').classList.remove('open');
+  updateChatDot();
+}
+
+function toggleChat() { if (chatOpen) closeChat(); else openChat(); }
+
+function updateChatDot() {
+  const dot = document.getElementById('chat-dot');
+  if (!dot) return;
+  const latest = chatMessages.length ? (chatMessages[chatMessages.length - 1].ts || 0) : 0;
+  const hasUnread = latest > lastReadTs;
+  dot.classList.remove('red', 'blink');
+  if (hasUnread) dot.classList.add('red');
+}
+
+function blinkDot() {
+  const dot = document.getElementById('chat-dot');
+  if (!dot) return;
+  dot.classList.remove('blink');
+  // force reflow so animation restarts
+  void dot.offsetWidth;
+  dot.classList.add('blink');
+  setTimeout(() => { dot.classList.remove('red'); }, 620);
+}
+
+function renderChatMessages() {
+  const wrap = document.getElementById('chat-messages');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  if (!chatMessages.length) {
+    const e = document.createElement('div'); e.className = 'chat-empty';
+    e.textContent = 'No messages yet. Say hello!';
+    wrap.appendChild(e); return;
+  }
+  chatMessages.forEach(msg => {
+    const mine = msg.uid === (user && user.uid);
+    const outer = document.createElement('div');
+    outer.className = 'chat-msg ' + (mine ? 'mine' : 'theirs');
+    const bubble = document.createElement('div'); bubble.className = 'chat-bubble';
+    bubble.textContent = msg.text;
+    const meta = document.createElement('div'); meta.className = 'chat-meta';
+    meta.textContent = (mine ? 'You' : msg.name) + (msg.ts ? '  ' + new Date(msg.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '');
+    outer.appendChild(bubble); outer.appendChild(meta);
+    wrap.appendChild(outer);
+  });
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById('chat-input');
+  const text = (input.value || '').trim();
+  if (!text || !code || !user) return;
+  input.value = '';
+  document.getElementById('btn-chat-send').disabled = true;
+  try {
+    await addDoc(collection(db, 'games', code, 'chat'), {
+      uid: user.uid,
+      name: (user.displayName || '').split(' ')[0] || 'Player',
+      text,
+      ts: serverTimestamp(),
+    });
+  } catch(e) { console.error('chat send failed', e); }
+  document.getElementById('btn-chat-send').disabled = false;
+  input.focus();
+}
+
+function subscribeChat() {
+  if (unsubChat) unsubChat();
+  lastReadTs = loadLastRead();
+  const q = query(collection(db, 'games', code, 'chat'), orderBy('ts', 'asc'));
+  unsubChat = onSnapshot(q, (snap) => {
+    const prev = chatMessages.length;
+    chatMessages = snap.docs.map(d => {
+      const data = d.data();
+      return { id: d.id, uid: data.uid, name: data.name, text: data.text,
+               ts: data.ts ? data.ts.toMillis() : 0 };
+    });
+    if (chatOpen) {
+      // Panel is open — if new message arrived, mark read immediately
+      const latest = chatMessages.length ? chatMessages[chatMessages.length - 1].ts : 0;
+      if (chatMessages.length > prev && latest > lastReadTs) {
+        // blink dot red once then go green
+        blinkDot();
+        lastReadTs = latest; saveLastRead(latest);
+      }
+      renderChatMessages();
+      updateChatDot();
+    } else {
+      // Panel is closed — show red dot if there's something new
+      updateChatDot();
+    }
+  });
+}
 
 /* ---------- sounds ---------- */
 const SFX = {
@@ -426,6 +647,7 @@ function subscribe() {
   if (unsubPub) unsubPub();
   if (unsubHand) unsubHand();
   document.getElementById('table-code').textContent = 'code ' + code;
+  subscribeChat();
 
   unsubHand = onSnapshot(doc(db, 'games', code, 'hands', myId), (s) => {
     myCards = s.exists() ? (s.data().cards || []) : [];
@@ -726,8 +948,10 @@ function renderHint(state, sel, myTurn) {
 
 /* ---------- leave / rematch ---------- */
 function leave() {
-  if (unsubPub) unsubPub(); if (unsubHand) unsubHand();
-  unsubPub = unsubHand = null; curPub = null; myCards = []; selection = null; expanded = new Set();
+  if (unsubPub) unsubPub(); if (unsubHand) unsubHand(); if (unsubChat) unsubChat();
+  unsubPub = unsubHand = unsubChat = null; curPub = null; myCards = []; chatMessages = [];
+  selection = null; expanded = new Set(); chatOpen = false;
+  document.getElementById('chat-panel').classList.remove('open');
   clearIdentity(); show('lobby'); lobbyErr('');
 }
 
@@ -743,6 +967,12 @@ document.getElementById('btn-copy-link').onclick = () =>
   navigator.clipboard?.writeText(location.origin + location.pathname + '?game=' + code);
 document.getElementById('btn-google').onclick = signInWithGoogle;
 document.getElementById('btn-signout').onclick = (e) => { e.preventDefault(); doSignOut(); };
+document.getElementById('btn-chat').onclick = toggleChat;
+document.getElementById('btn-chat-close').onclick = closeChat;
+document.getElementById('btn-chat-send').onclick = sendChatMessage;
+document.getElementById('chat-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
+});
 
 // Auto-fill join code from a shared ?game= link.
 const urlCode = new URLSearchParams(location.search).get('game');
