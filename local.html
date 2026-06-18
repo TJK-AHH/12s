@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>12s — local test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --table:      #143642;
+    --table-2:    #1d4d57;
+    --felt-line:  #2a6470;
+    --paper:      #f5efe2;
+    --ink:        #1a1410;
+    --ink-soft:   #6b6256;
+    --troy:       #e0992b;
+    --kaara:      #d65d7a;
+    --wild-a:     #f2c14e;
+    --wild-b:     #e8833a;
+    --glow:       #5fd9b0;
+    --danger:     #e2603f;
+
+    --r-card: 11px;
+    --card-w: 50px;
+    --card-h: 70px;
+    --fan-offset: 22px;
+    --shadow-card: 0 2px 4px rgba(0,0,0,.28), 0 6px 14px rgba(0,0,0,.22);
+    --font-display: "Bricolage Grotesque", system-ui, sans-serif;
+    --font-body: "Inter", system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-body);
+    color: var(--paper);
+    background:
+      radial-gradient(120% 80% at 50% -10%, var(--table-2) 0%, var(--table) 55%, #0e272f 100%);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior: none;
+  }
+
+  .wrap { max-width: 920px; margin: 0 auto; padding: 14px 14px 40px; }
+
+  /* ---- Header ---- */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; margin-bottom: 14px;
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand h1 {
+    font-family: var(--font-display);
+    font-weight: 800; font-size: 30px; letter-spacing: -.02em;
+    margin: 0; line-height: 1;
+  }
+  .brand .sub { color: var(--ink-soft); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
+
+  .turnflag {
+    font-family: var(--font-display);
+    font-weight: 700; font-size: 14px;
+    padding: 8px 14px; border-radius: 999px;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.12);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .turnflag .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--glow); box-shadow: 0 0 0 4px rgba(95,217,176,.18); }
+  .turnflag.is-troy  .dot { background: var(--troy);  box-shadow: 0 0 0 4px rgba(224,153,43,.2); }
+  .turnflag.is-kaara .dot { background: var(--kaara); box-shadow: 0 0 0 4px rgba(214,93,122,.2); }
+
+  /* ---- Player zone ---- */
+  .zone {
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,.08);
+    background: rgba(0,0,0,.14);
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .zone.active { border-color: rgba(95,217,176,.45); box-shadow: 0 0 0 1px rgba(95,217,176,.25), 0 10px 30px rgba(0,0,0,.25); }
+  .zone-head {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+  }
+  .pname {
+    font-family: var(--font-display); font-weight: 700; font-size: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .pname .chip { width: 12px; height: 12px; border-radius: 3px; }
+  .chip.troy  { background: var(--troy); }
+  .chip.kaara { background: var(--kaara); }
+  .pmeta { color: var(--ink-soft); font-size: 12px; margin-left: auto; }
+
+  .row { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+  .group { display: flex; flex-direction: column; gap: 6px; }
+  .group > .glabel { color: var(--ink-soft); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; }
+  .piles { display: flex; gap: 8px; }
+
+  /* ---- Cards ---- */
+  .card {
+    position: relative;
+    width: var(--card-w); height: var(--card-h);
+    border-radius: var(--r-card);
+    background: var(--paper);
+    color: var(--ink);
+    box-shadow: var(--shadow-card);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display); font-weight: 800;
+    font-size: 26px;
+    user-select: none;
+    transition: transform .08s ease, box-shadow .12s ease;
+  }
+  .card .corner {
+    position: absolute; top: 4px; left: 6px;
+    font-size: 11px; font-weight: 700; color: var(--ink-soft);
+  }
+  .card .corner.br { top: auto; left: auto; bottom: 4px; right: 6px; transform: rotate(180deg); }
+  .card.wild {
+    color: #4a2d05;
+    background: linear-gradient(135deg, var(--wild-a) 0%, var(--wild-b) 100%);
+    background-size: 200% 200%;
+    animation: shimmer 4s ease-in-out infinite;
+  }
+  .card.wild .corner { color: rgba(74,45,5,.7); }
+  @keyframes shimmer { 0%,100%{ background-position: 0% 50%; } 50%{ background-position: 100% 50%; } }
+
+  .card.back {
+    /* Fallback stripes show if the image is missing or misnamed. */
+    background-color: #1c3f48;
+    background-image:
+      url("12s.jpg"),
+      repeating-linear-gradient(45deg, #234b56 0 8px, #1c3f48 8px 16px);
+    background-size: cover, auto;
+    background-position: center;
+    background-repeat: no-repeat;
+    color: transparent; box-shadow: var(--shadow-card);
+  }
+  .card.empty {
+    background: transparent; box-shadow: none;
+    border: 1.5px dashed rgba(255,255,255,.22);
+    color: rgba(255,255,255,.28); font-size: 12px; font-weight: 600;
+    font-family: var(--font-body);
+  }
+
+  /* count badge on stock */
+  .stockwrap { position: relative; }
+  .stockwrap .count {
+    position: absolute; bottom: -7px; right: -7px;
+    background: var(--ink); color: var(--paper);
+    font-family: var(--font-display); font-weight: 700; font-size: 12px;
+    min-width: 24px; height: 24px; padding: 0 5px;
+    border-radius: 999px; display: flex; align-items: center; justify-content: center;
+    border: 2px solid var(--table);
+  }
+  .stockwrap.troy  .count { background: var(--troy); color: #2a1c02; }
+  .stockwrap.kaara .count { background: var(--kaara); color: #3a0f1c; }
+
+  /* selectable / target states */
+  .selectable { cursor: pointer; }
+  .selectable:hover { transform: translateY(-3px); }
+
+  /* expanded discard pile: cards fanned downward so every number is visible */
+  .fan { position: relative; width: var(--card-w); }
+  .fan .card { position: absolute; left: 0; }
+  .fan .fan-badge {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    bottom: -26px; z-index: 50;
+    background: var(--glow); color: #06231a;
+    font-family: var(--font-body); font-weight: 600; font-size: 10px;
+    padding: 3px 8px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+  }
+  .selected { outline: 3px solid var(--glow); outline-offset: 2px; transform: translateY(-6px); }
+  .target {
+    cursor: pointer;
+    outline: 3px solid var(--glow); outline-offset: 2px;
+    animation: pulse 1.1s ease-in-out infinite;
+  }
+  .target.discard { outline-color: var(--danger); }
+  .target.discard { animation-name: pulseRed; }
+  @keyframes pulse  { 0%,100%{ box-shadow: 0 0 0 0 rgba(95,217,176,.0);} 50%{ box-shadow: 0 0 0 6px rgba(95,217,176,.18);} }
+  @keyframes pulseRed { 0%,100%{ box-shadow: 0 0 0 0 rgba(226,96,63,0);} 50%{ box-shadow: 0 0 0 6px rgba(226,96,63,.20);} }
+
+  /* ---- Center / building piles ---- */
+  .center {
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,.10);
+    background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(0,0,0,.10));
+    padding: 16px 12px; margin-bottom: 12px;
+  }
+  .center-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .center-head .glabel { color: var(--ink-soft); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; }
+  .draw { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-soft); }
+  .draw b { font-family: var(--font-display); color: var(--paper); font-size: 14px; }
+
+  .builds { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .build {
+    width: 64px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .track {
+    width: 8px; height: 84px; border-radius: 6px;
+    background: rgba(255,255,255,.10);
+    position: relative; overflow: hidden;
+  }
+  .track .fill {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(180deg, var(--glow), #2e8f78);
+    transition: height .25s ease;
+  }
+  .build .slot { /* the card-or-empty */ }
+  .build .nxt { font-size: 10px; color: var(--ink-soft); font-family: var(--font-body); }
+
+  /* ---- Hand ---- */
+  .hand-zone {
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,.10);
+    background: rgba(0,0,0,.18);
+    padding: 12px;
+  }
+  .hand-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .hand-head .who { font-family: var(--font-display); font-weight: 700; }
+  .hand { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; min-height: 74px; }
+  .hint { color: var(--ink-soft); font-size: 12px; text-align: center; margin-top: 10px; min-height: 16px; }
+
+  /* ---- Buttons ---- */
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  button {
+    font-family: var(--font-body); font-weight: 600; font-size: 13px;
+    color: var(--paper); background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.16);
+    padding: 8px 14px; border-radius: 10px; cursor: pointer;
+    transition: background .12s ease;
+  }
+  button:hover { background: rgba(255,255,255,.14); }
+  button.primary { background: var(--glow); color: #06231a; border-color: transparent; }
+  button.primary:hover { filter: brightness(1.05); }
+  button.ghost { background: transparent; }
+
+  .toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-soft); cursor: pointer; }
+  .toggle input { accent-color: var(--glow); }
+
+  /* ---- Win banner ---- */
+  .banner {
+    margin-bottom: 12px; padding: 14px 16px; border-radius: 14px;
+    background: linear-gradient(135deg, rgba(95,217,176,.18), rgba(95,217,176,.06));
+    border: 1px solid rgba(95,217,176,.4);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .banner b { font-family: var(--font-display); font-size: 18px; }
+
+  @media (max-width: 560px) {
+    :root { --card-w: 44px; --card-h: 62px; --fan-offset: 19px; }
+    .card { font-size: 22px; }
+    .build { width: 56px; }
+    .brand h1 { font-size: 24px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card.wild { animation: none; }
+    .target { animation: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="brand">
+      <h1>12s</h1>
+      <span class="sub">local test</span>
+    </div>
+    <div id="turnflag" class="turnflag"><span class="dot"></span><span id="turnflag-text">—</span></div>
+  </div>
+
+  <div id="banner" class="banner" style="display:none;">
+    <span><b id="banner-text">—</b></span>
+    <button class="primary" onclick="newGame()">New game</button>
+  </div>
+
+  <!-- Opponent (top) -->
+  <div id="zone-top" class="zone"></div>
+
+  <!-- Center building piles -->
+  <div class="center">
+    <div class="center-head">
+      <span class="glabel">Building piles · climb to 12</span>
+      <span class="draw">Draw pile <b id="drawcount">0</b><span id="bufnote"></span></span>
+    </div>
+    <div id="builds" class="builds"></div>
+  </div>
+
+  <!-- Active player zone (bottom) -->
+  <div id="zone-bottom" class="zone active"></div>
+
+  <!-- Hand -->
+  <div class="hand-zone">
+    <div class="hand-head">
+      <span class="who" id="hand-who">—</span>
+      <label class="toggle"><input type="checkbox" id="reveal" onchange="render()" /> Reveal both hands (testing)</label>
+    </div>
+    <div id="hand" class="hand"></div>
+    <div class="hint" id="hint">Tap a card to select it.</div>
+    <div class="btns" style="justify-content:center; margin-top:10px;">
+      <button class="ghost" onclick="clearSelection()">Clear selection</button>
+      <button class="ghost" onclick="newGame()">Restart</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- engine.js is the single source of truth for all rules; keep it beside this file -->
+<script src="engine.js"></script>
+<script>
+/* ============================================================================
+ * 12s — local UI controller
+ * Drives engine.js for a hot-seat test version. Both players on one screen;
+ * the inactive hand is hidden unless "Reveal both hands" is on.
+ * ==========================================================================*/
+
+const PLAYER_INFOS = [
+  { playerId: 'troy',  displayName: 'Troy'  },
+  { playerId: 'kaara', displayName: 'Kaara' },
+];
+const COLOR_BY_ID = { troy: 'troy', kaara: 'kaara' };
+
+let state = null;
+// Current selection: a "source" the engine understands, plus which player owns it.
+// { ownerIndex, source: {type:'hand'|'stock'|'discard', index?/pileIndex?} }
+let selection = null;
+// Which discard pile is fanned open for inspection: { ownerIndex, pileIndex } | null
+let expanded = null;
+
+function toggleExpand(ownerIndex, pileIndex) {
+  if (expanded && expanded.ownerIndex === ownerIndex && expanded.pileIndex === pileIndex) {
+    expanded = null;
+  } else {
+    expanded = { ownerIndex, pileIndex };
+  }
+  render();
+}
+function isExpanded(ownerIndex, pileIndex) {
+  return !!expanded && expanded.ownerIndex === ownerIndex && expanded.pileIndex === pileIndex;
+}
+
+function newGame() {
+  state = Engine.createGame(PLAYER_INFOS);
+  selection = null;
+  expanded = null;
+  render();
+}
+
+/* ---------- card rendering ---------- */
+function cardEl(card, opts = {}) {
+  const el = document.createElement('div');
+  el.className = 'card' + (card && card.isWild ? ' wild' : '');
+  if (opts.extraClass) el.className += ' ' + opts.extraClass;
+  if (!card) { el.className = 'card empty'; el.textContent = opts.emptyLabel || ''; return el; }
+  const face = card.isWild ? 'W' : String(card.value);
+  el.textContent = face;
+  const c1 = document.createElement('span'); c1.className = 'corner';    c1.textContent = face; el.appendChild(c1);
+  const c2 = document.createElement('span'); c2.className = 'corner br'; c2.textContent = face; el.appendChild(c2);
+  return el;
+}
+function backEl() { const el = document.createElement('div'); el.className = 'card back'; return el; }function emptyEl(label) { const el = document.createElement('div'); el.className = 'card empty'; el.textContent = label || ''; return el; }
+
+/* Render one discard pile: collapsed (top card + count badge) or fanned open
+ * (every card visible). The top card stays selectable / a discard target.
+ * Either player can fan open any pile (discard piles are fully public). */
+function discardPileEl(pile, ownerIndex, pileIndex, isActive) {
+  const canActOnTop = isActive && state.status === 'active';
+  const isDiscardTarget = canActOnTop && selection && selection.source.type === 'hand';
+
+  // Wire the top card's play/discard behavior.
+  function dressTopCard(el) {
+    if (isDiscardTarget) {
+      el.classList.add('target', 'discard');
+      el.onclick = () => tryDiscard(pileIndex);
+    } else if (canActOnTop) {
+      el.classList.add('selectable');
+      if (sameSource(selection, { ownerIndex, source: { type: 'discard', pileIndex } })) el.classList.add('selected');
+      el.onclick = () => trySelect(ownerIndex, { type: 'discard', pileIndex });
+    }
+    return el;
+  }
+
+  if (pile.length === 0) {
+    const el = emptyEl('');
+    if (isDiscardTarget) {
+      el.classList.add('target', 'discard');
+      el.onclick = () => tryDiscard(pileIndex);
+    }
+    return el;
+  }
+
+  const open = isExpanded(ownerIndex, pileIndex);
+
+  // ---- Expanded: vertical fan of all cards ----
+  if (open && pile.length > 1) {
+    const fan = document.createElement('div');
+    fan.className = 'fan';
+    fan.style.height = 'calc(var(--card-h) + ' + (pile.length - 1) + ' * var(--fan-offset))';
+    pile.forEach((card, idx) => {
+      const c = cardEl(card);
+      c.style.top = 'calc(' + idx + ' * var(--fan-offset))';
+      c.style.zIndex = String(idx + 1);
+      if (idx === pile.length - 1) dressTopCard(c); // only the top card is actionable
+      fan.appendChild(c);
+    });
+    const badge = document.createElement('span');
+    badge.className = 'fan-badge';
+    badge.textContent = 'close ▲';
+    badge.onclick = (e) => { e.stopPropagation(); toggleExpand(ownerIndex, pileIndex); };
+    fan.appendChild(badge);
+    return fan;
+  }
+
+  // ---- Collapsed: top card + count badge ----
+  const top = pile[pile.length - 1];
+  const el = dressTopCard(cardEl(top));
+  if (pile.length > 1) {
+    const wrap = document.createElement('div'); wrap.className = 'stockwrap';
+    wrap.appendChild(el);
+    const cnt = document.createElement('span');
+    cnt.className = 'count'; cnt.style.background = 'var(--ink)';
+    cnt.style.cursor = 'pointer'; cnt.title = 'Tap to see all cards';
+    cnt.textContent = pile.length;
+    cnt.onclick = (e) => { e.stopPropagation(); toggleExpand(ownerIndex, pileIndex); };
+    wrap.appendChild(cnt);
+    return wrap;
+  }
+  return el;
+}
+
+/* ---------- selection helpers ---------- */
+function sameSource(a, b) {
+  if (!a || !b) return false;
+  if (a.ownerIndex !== b.ownerIndex) return false;
+  if (a.source.type !== b.source.type) return false;
+  if (a.source.type === 'hand') return a.source.index === b.source.index;
+  if (a.source.type === 'discard') return a.source.pileIndex === b.source.pileIndex;
+  return true; // stock
+}
+function clearSelection() { selection = null; render(); }
+
+function selectedCard() {
+  if (!selection) return null;
+  const player = state.players[selection.ownerIndex];
+  return Engine.peekSource(player, selection.source);
+}
+
+/* ---------- interaction ---------- */
+// Only the active player may select their own sources.
+function trySelect(ownerIndex, source) {
+  if (state.status !== 'active') return;
+  if (ownerIndex !== state.currentTurnIndex) return; // can't act with opponent's cards
+  const next = { ownerIndex, source };
+  selection = sameSource(selection, next) ? null : next; // toggle off if re-tapped
+  render();
+}
+
+function tryPlayToBuilding(slotIndex) {
+  if (!selection) return;
+  const r = Engine.playCard(state, selection.source, slotIndex);
+  if (!r.ok) { flashHint(r.error); return; }
+  selection = null;
+  render();
+  if (r.gameOver) showWin(r.winnerPlayerId);
+}
+
+function tryDiscard(pileIndex) {
+  if (!selection || selection.source.type !== 'hand') return;
+  const r = Engine.discard(state, selection.source.index, pileIndex);
+  if (!r.ok) { flashHint(r.error); return; }
+  selection = null;
+  render();
+}
+
+let hintTimer = null;
+function flashHint(msg) {
+  const h = document.getElementById('hint');
+  h.textContent = msg; h.style.color = 'var(--danger)';
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => render(), 1400);
+}
+
+function showWin(winnerId) {
+  const name = PLAYER_INFOS.find(p => p.playerId === winnerId).displayName;
+  const b = document.getElementById('banner');
+  document.getElementById('banner-text').textContent = name + ' wins — stock pile empty!';
+  b.style.display = 'flex';
+}
+
+/* ---------- main render ---------- */
+function render() {
+  if (!state) return;
+  const active = state.currentTurnIndex;
+  const opp = (active + 1) % state.players.length;
+  const sel = selectedCard();
+
+  // turn flag
+  const tf = document.getElementById('turnflag');
+  const activeName = state.players[active].displayName;
+  tf.className = 'turnflag is-' + COLOR_BY_ID[state.players[active].playerId];
+  document.getElementById('turnflag-text').textContent =
+    state.status === 'finished' ? 'game over' : activeName + "'s turn";
+
+  // banner reset when active game
+  if (state.status === 'active') document.getElementById('banner').style.display = 'none';
+
+  // draw count
+  document.getElementById('drawcount').textContent = state.drawPile.length;
+  document.getElementById('bufnote').textContent =
+    state.completedPilesBuffer.length ? '  ·  set-aside ' + state.completedPilesBuffer.length : '';
+
+  // zones: opponent on top, active on bottom
+  renderZone(document.getElementById('zone-top'), opp, false);
+  renderZone(document.getElementById('zone-bottom'), active, true);
+
+  renderBuilds(sel);
+  renderHand(active, opp, sel);
+  renderHintDefault(sel);
+}
+
+function renderZone(container, playerIndex, isActive) {
+  const p = state.players[playerIndex];
+  const colorClass = COLOR_BY_ID[p.playerId];
+  container.className = 'zone' + (isActive && state.status === 'active' ? ' active' : '');
+  container.innerHTML = '';
+
+  const head = document.createElement('div'); head.className = 'zone-head';
+  head.innerHTML =
+    '<span class="pname"><span class="chip ' + colorClass + '"></span>' + p.displayName +
+    (isActive ? '' : ' <span style="color:var(--ink-soft);font-weight:500;font-size:12px;">(opponent)</span>') + '</span>' +
+    '<span class="pmeta">stock ' + p.stockPile.length + ' · hand ' + p.hand.length + '</span>';
+  container.appendChild(head);
+
+  const row = document.createElement('div'); row.className = 'row';
+
+  // Stock
+  const stockGroup = document.createElement('div'); stockGroup.className = 'group';
+  const sl = document.createElement('span'); sl.className = 'glabel'; sl.textContent = 'Stock (goal: empty)'; stockGroup.appendChild(sl);
+  const sw = document.createElement('div'); sw.className = 'stockwrap ' + colorClass;
+  const top = p.stockPile.length ? p.stockPile[p.stockPile.length - 1] : null;
+  let stockCard;
+  if (top) {
+    stockCard = cardEl(top);
+    if (isActive && state.status === 'active') {
+      stockCard.classList.add('selectable');
+      if (sameSource(selection, { ownerIndex: playerIndex, source: { type: 'stock' } })) stockCard.classList.add('selected');
+      stockCard.onclick = () => trySelect(playerIndex, { type: 'stock' });
+    }
+  } else {
+    stockCard = emptyEl('empty');
+  }
+  sw.appendChild(stockCard);
+  if (p.stockPile.length) { const cnt = document.createElement('span'); cnt.className = 'count'; cnt.textContent = p.stockPile.length; sw.appendChild(cnt); }
+  stockGroup.appendChild(sw);
+  row.appendChild(stockGroup);
+
+  // Discards
+  const dGroup = document.createElement('div'); dGroup.className = 'group';
+  const dl = document.createElement('span'); dl.className = 'glabel'; dl.textContent = 'Discard piles'; dGroup.appendChild(dl);
+  const dPiles = document.createElement('div'); dPiles.className = 'piles';
+  dPiles.style.alignItems = 'flex-start';
+  p.discardPiles.forEach((pile, i) => {
+    dPiles.appendChild(discardPileEl(pile, playerIndex, i, isActive));
+  });
+  dGroup.appendChild(dPiles);
+  row.appendChild(dGroup);
+
+  // Opponent's hand: shown as face-down backs so card COUNT is visible (like a
+  // real table) while contents stay hidden. Faces shown when testing-reveal is on.
+  if (!isActive) {
+    const reveal = document.getElementById('reveal').checked;
+    const hGroup = document.createElement('div'); hGroup.className = 'group';
+    const hl = document.createElement('span'); hl.className = 'glabel';
+    hl.textContent = 'Hand · ' + p.hand.length + (reveal ? ' (testing)' : '');
+    hGroup.appendChild(hl);
+    const hr = document.createElement('div'); hr.className = 'piles';
+    if (p.hand.length === 0) {
+      hr.appendChild(emptyEl(''));
+    } else {
+      p.hand.forEach(c => hr.appendChild(reveal ? cardEl(c) : backEl()));
+    }
+    hGroup.appendChild(hr);
+    row.appendChild(hGroup);
+  }
+
+  container.appendChild(row);
+}
+
+function renderBuilds(sel) {
+  const wrap = document.getElementById('builds');
+  wrap.innerHTML = '';
+  for (let slot = 0; slot < Engine.MAX_BUILDING_PILES; slot++) {
+    const pile = state.buildingPiles[slot];
+    const col = document.createElement('div'); col.className = 'build';
+
+    // climb track
+    const track = document.createElement('div'); track.className = 'track';
+    const fill = document.createElement('div'); fill.className = 'fill';
+    const topVal = pile ? pile.topValue : 0;
+    fill.style.height = Math.round((topVal / Engine.MAX_VALUE) * 100) + '%';
+    track.appendChild(fill); col.appendChild(track);
+
+    // slot card
+    let card;
+    if (pile) {
+      const topCard = pile.cards[pile.cards.length - 1];
+      // show the effective value (topValue), not the wild's null face
+      card = cardEl({ value: pile.topValue, isWild: false });
+      if (topCard.isWild) card.classList.add('wild');
+    } else {
+      card = emptyEl('start');
+    }
+
+    // target highlight if the selected card can legally go here
+    if (sel && state.status === 'active') {
+      const legal = Engine.canPlayOnBuilding(state, sel, slot);
+      if (legal) { card.classList.add('target'); card.onclick = () => tryPlayToBuilding(slot); }
+    }
+    col.appendChild(card);
+
+    const nxt = document.createElement('div'); nxt.className = 'nxt';
+    nxt.textContent = pile ? (topVal >= 12 ? 'done' : 'next ' + (topVal + 1)) : 'next 1 / W';
+    col.appendChild(nxt);
+
+    wrap.appendChild(col);
+  }
+}
+
+function renderHand(activeIndex, oppIndex, sel) {
+  const handWrap = document.getElementById('hand');
+  handWrap.innerHTML = '';
+
+  const active = state.players[activeIndex];
+  document.getElementById('hand-who').textContent = active.displayName + "'s hand";
+
+  active.hand.forEach((card, i) => {
+    const el = cardEl(card);
+    if (state.status === 'active') {
+      el.classList.add('selectable');
+      if (sameSource(selection, { ownerIndex: activeIndex, source: { type: 'hand', index: i } })) el.classList.add('selected');
+      el.onclick = () => trySelect(activeIndex, { type: 'hand', index: i });
+    }
+    handWrap.appendChild(el);
+  });
+}
+
+function renderHintDefault(sel) {
+  const h = document.getElementById('hint');
+  h.style.color = 'var(--ink-soft)';
+  if (state.status === 'finished') { h.textContent = 'Game over. Start a new game to play again.'; return; }
+  if (!sel) {
+    const anyPlay = Engine.hasAnyLegalPlay(state);
+    h.textContent = anyPlay
+      ? 'Tap a card (hand, your stock, or a discard top) to select it.'
+      : 'No plays available — tap a hand card, then tap a discard pile to end your turn.';
+    return;
+  }
+  if (selection.source.type === 'hand') {
+    h.textContent = 'Tap a glowing pile to play · tap a red discard pile to discard and end your turn.';
+  } else {
+    h.textContent = 'Tap a glowing building pile to play this card.';
+  }
+}
+
+newGame();
+</script>
+</body>
+</html>
