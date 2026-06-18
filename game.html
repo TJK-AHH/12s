@@ -275,9 +275,20 @@ const IDENT_KEY = '12s.identity';
 let user = null;
 let code = null, myId = null, myIndex = null;
 let curPub = null, myCards = [];
-let selection = null, expanded = null;
+let selection = null, expanded = new Set();
 let unsubPub = null, unsubHand = null;
 let drawInFlight = false;
+
+/* ---------- sounds ---------- */
+const SFX = {
+  start: new Audio('start.mp3'),
+  turn:  new Audio('turn.mp3'),
+  win:   new Audio('win.mp3'),
+};
+function playSound(name) {
+  try { const a = SFX[name]; a.currentTime = 0; a.play().catch(() => {}); } catch(e) {}
+}
+let _prevTurnIndex = null, _prevStatus = null;
 
 /* ---------- screens ---------- */
 function show(which) {
@@ -511,17 +522,28 @@ function flashHint(msg) {
 }
 
 function toggleExpand(ownerIndex, pileIndex) {
-  if (expanded && expanded.ownerIndex === ownerIndex && expanded.pileIndex === pileIndex) expanded = null;
-  else expanded = { ownerIndex, pileIndex };
+  const key = ownerIndex + '-' + pileIndex;
+  if (expanded.has(key)) expanded.delete(key); else expanded.add(key);
   render();
 }
-function isExpanded(o, p) { return !!expanded && expanded.ownerIndex === o && expanded.pileIndex === p; }
+function isExpanded(o, p) { return expanded.has(o + '-' + p); }
 
 function render() {
   if (!curPub) return;
   const state = Net.reconstruct(curPub, myIndex, myCards);
   const oppIndex = 1 - myIndex;
   const myTurn = isMyTurn();
+
+  /* -- sound transitions -- */
+  const _justStarted  = _prevStatus !== 'active'  && state.status === 'active';
+  const _justFinished = _prevStatus !== 'finished' && state.status === 'finished';
+  const _myTurnNow    = state.currentTurnIndex === myIndex;
+  const _myTurnBefore = _prevTurnIndex === myIndex;
+  if (_justStarted)  playSound('start');
+  if (_justFinished) playSound('win');
+  if (_myTurnNow && !_myTurnBefore && state.status === 'active' && !_justStarted) playSound('turn');
+  _prevStatus    = state.status;
+  _prevTurnIndex = state.currentTurnIndex;
   const sel = selectedCard(state);
 
   // turn flag
@@ -705,7 +727,7 @@ function renderHint(state, sel, myTurn) {
 /* ---------- leave / rematch ---------- */
 function leave() {
   if (unsubPub) unsubPub(); if (unsubHand) unsubHand();
-  unsubPub = unsubHand = null; curPub = null; myCards = []; selection = null; expanded = null;
+  unsubPub = unsubHand = null; curPub = null; myCards = []; selection = null; expanded = new Set();
   clearIdentity(); show('lobby'); lobbyErr('');
 }
 
