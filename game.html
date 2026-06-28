@@ -18,7 +18,7 @@
 <style>
   :root {
     --table:#143642; --table-2:#1d4d57; --paper:#f5efe2; --ink:#1a1410; --ink-soft:#6b6256;
-    --troy:#e0992b; --kaara:#d65d7a; --wild-a:#f2c14e; --wild-b:#e8833a; --glow:#5fd9b0; --danger:#e2603f;
+    --troy:#e0992b; --kaara:#d65d7a; --p2:#5b8ef2; --p3:#9b6bd6; --wild-a:#f2c14e; --wild-b:#e8833a; --glow:#5fd9b0; --danger:#e2603f;
     --r-card:11px; --card-w:50px; --card-h:70px; --fan-offset:22px;
     --shadow-card:0 2px 4px rgba(0,0,0,.28), 0 6px 14px rgba(0,0,0,.22);
     --font-display:"Bricolage Grotesque", system-ui, sans-serif;
@@ -105,6 +105,8 @@
   .turnflag .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--glow); box-shadow: 0 0 0 4px rgba(95,217,176,.18); }
   .turnflag.is-troy .dot { background: var(--troy); box-shadow: 0 0 0 4px rgba(224,153,43,.2); }
   .turnflag.is-kaara .dot { background: var(--kaara); box-shadow: 0 0 0 4px rgba(214,93,122,.2); }
+  .turnflag.is-p2 .dot { background: var(--p2); box-shadow: 0 0 0 4px rgba(91,142,242,.2); }
+  .turnflag.is-p3 .dot { background: var(--p3); box-shadow: 0 0 0 4px rgba(155,107,214,.2); }
 
   .zone { border-radius: 16px; border: 1px solid rgba(255,255,255,.08); background: rgba(0,0,0,.14); padding: 12px; margin-bottom: 12px; }
   .zone.active { border-color: rgba(95,217,176,.45); box-shadow: 0 0 0 1px rgba(95,217,176,.25), 0 10px 30px rgba(0,0,0,.25); }
@@ -112,6 +114,7 @@
   .pname { font-family: var(--font-display); font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px; }
   .pname .chip { width: 12px; height: 12px; border-radius: 3px; }
   .chip.troy { background: var(--troy); } .chip.kaara { background: var(--kaara); }
+  .chip.p2 { background: var(--p2); } .chip.p3 { background: var(--p3); }
   .pmeta { color: var(--ink-soft); font-size: 12px; margin-left: auto; }
 
   .row { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
@@ -132,6 +135,8 @@
   .stockwrap .count { position: absolute; bottom: -7px; right: -7px; background: var(--ink); color: var(--paper); font-family: var(--font-display); font-weight: 700; font-size: 12px; min-width: 24px; height: 24px; padding: 0 5px; border-radius: 999px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--table); }
   .stockwrap.troy .count { background: var(--troy); color: #2a1c02; }
   .stockwrap.kaara .count { background: var(--kaara); color: #3a0f1c; }
+  .stockwrap.p2 .count { background: var(--p2); color: #0a1733; }
+  .stockwrap.p3 .count { background: var(--p3); color: #1f0f33; }
 
   .selectable { cursor: pointer; }
   .selectable:hover { transform: translateY(-3px); }
@@ -308,7 +313,6 @@
         </div>
       </div>
       <div class="deck-summary" id="deck-summary">20 decks · 280 cards · 40 wild</div>
-      <div class="rules-note" id="players-note" style="display:none;"></div>
     </div>
 
     <button class="primary" id="btn-create">Create game</button>
@@ -335,13 +339,13 @@
   <h1>12s</h1>
   <div class="tag">waiting room</div>
   <div class="panel">
-    <p style="margin:0 0 4px; color:var(--ink-soft); font-size:13px;">Share this code with your opponent</p>
+    <p style="margin:0 0 4px; color:var(--ink-soft); font-size:13px;">Share this code with the other players</p>
     <div class="codebig" id="wait-code">----</div>
     <div class="copyrow">
       <button class="ghost" id="btn-copy-code">Copy code</button>
       <button class="ghost" id="btn-copy-link">Copy link</button>
     </div>
-    <p style="margin:10px 0 0; color:var(--ink-soft); font-size:13px;"><span class="spin"></span> Waiting for them to join…</p>
+    <p style="margin:10px 0 0; color:var(--ink-soft); font-size:13px;"><span class="spin"></span> <span id="wait-progress">Waiting for them to join…</span></p>
   </div>
   <button class="ghost" id="btn-cancel">Cancel</button>
 </div>
@@ -372,7 +376,7 @@
     <span><b id="banner-text">—</b></span>
     <button class="primary" style="width:auto;" id="btn-rematch">New game</button>
   </div>
-  <div id="zone-top" class="zone"></div>
+  <div id="zones-opponents"></div>
   <div class="center">
     <div class="center-head">
       <span class="glabel">Building piles · climb to 12</span>
@@ -424,7 +428,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 const Engine = window.Engine, Net = window.Net;
-const COLOR_BY_PID = { p0: 'troy', p1: 'kaara' };
+const COLOR_BY_PID = { p0: 'troy', p1: 'kaara', p2: 'p2', p3: 'p3' };
 const IDENT_KEY = '12s.identity';
 
 /* ---------- session state ---------- */
@@ -644,7 +648,10 @@ async function findMyGame(uid) {
   myId = 'p' + myIndex;
   saveIdentity();
   show(pick.data.status === 'waiting' ? 'waiting' : 'table');
-  if (pick.data.status === 'waiting') document.getElementById('wait-code').textContent = code;
+  if (pick.data.status === 'waiting') {
+    document.getElementById('wait-code').textContent = code;
+    updateWaitingProgress(pick.data);
+  }
   subscribe();
   return true;
 }
@@ -657,6 +664,15 @@ function makeCode() {
   return c;
 }
 
+function updateWaitingProgress(pub) {
+  const el = document.getElementById('wait-progress');
+  if (!el || !pub || !pub.players) return;
+  const remaining = pub.players.length - pub.playerUids.length;
+  el.textContent = remaining <= 1
+    ? 'Waiting for them to join…'
+    : 'Waiting for ' + remaining + ' more players…';
+}
+
 /* ---------- create / join / resume ---------- */
 async function createGame() {
   if (!user) return;
@@ -664,12 +680,10 @@ async function createGame() {
   lobbyErr('');
   const newCode = makeCode();
   const deckConfig = houseRulesOn ? { numDecks, extraWilds } : { numDecks: 20, extraWilds: 0 };
-  const created = Net.netCreate(name, '—', deckConfig);
+  const numPlayers = houseRulesOn ? playerCount : 2;
+  const created = Net.netCreate(name, numPlayers, deckConfig);
   created.pub.players[0].uid = user.uid;          // bind creator to slot 0
   created.pub.playerUids = [user.uid];            // for finding this game by account
-  // Player count beyond 2 is captured for when 3-4 player support lands, but
-  // creation still produces a standard 2-player game for now.
-  created.pub.targetPlayerCount = houseRulesOn ? playerCount : 2;
   try {
     // Write the game doc FIRST (binds creator uid), then the hand doc — the
     // security rules verify hand ownership against the committed game doc.
@@ -679,6 +693,7 @@ async function createGame() {
 
   code = newCode; myId = 'p0'; myIndex = 0; saveIdentity();
   document.getElementById('wait-code').textContent = newCode;
+  updateWaitingProgress(created.pub);
   show('waiting');
   subscribe();
 }
@@ -698,18 +713,30 @@ async function joinGame() {
   const pub = snap.data();
   if (pub.status !== 'waiting') { lobbyErr('That game has already started or finished.'); return; }
 
-  pub.players[1].displayName = name;
-  pub.players[1].uid = user.uid;                          // bind joiner to slot 1
-  pub.playerUids = [pub.players[0].uid, user.uid];
-  pub.status = 'active';
+  // Seats fill in order — the next open one is always right after the
+  // currently-bound seats (playerUids only contains bound uids, in order).
+  const slot = pub.playerUids.length;
+  if (slot >= pub.players.length) { lobbyErr('That game is already full.'); return; }
+
+  pub.players[slot].displayName = name;
+  pub.players[slot].uid = user.uid;
+  pub.playerUids = [...pub.playerUids, user.uid];
+  const isFull = pub.playerUids.length === pub.players.length;
+  if (isFull) pub.status = 'active';
   try {
     // Game doc first so the joiner's uid is bound before the hand doc is checked.
     await setDoc(doc(db, 'games', c), pub);
-    await setDoc(doc(db, 'games', c, 'hands', 'p1'), { cards: [] });
+    await setDoc(doc(db, 'games', c, 'hands', 'p' + slot), { cards: [] });
   } catch (e) { lobbyErr('Could not join: ' + e.message); return; }
 
-  code = c; myId = 'p1'; myIndex = 1; saveIdentity();
-  show('table');
+  code = c; myId = 'p' + slot; myIndex = slot; saveIdentity();
+  if (isFull) {
+    show('table');
+  } else {
+    document.getElementById('wait-code').textContent = code;
+    updateWaitingProgress(pub);
+    show('waiting');
+  }
   subscribe();
 }
 
@@ -721,7 +748,10 @@ async function resume(ident) {
   code = ident.code; myId = ident.myId; myIndex = ident.myIndex;
   const pub = snap.data();
   show(pub.status === 'waiting' ? 'waiting' : 'table');
-  if (pub.status === 'waiting') document.getElementById('wait-code').textContent = code;
+  if (pub.status === 'waiting') {
+    document.getElementById('wait-code').textContent = code;
+    updateWaitingProgress(pub);
+  }
   subscribe();
   return true;
 }
@@ -742,7 +772,9 @@ function subscribe() {
     if (!s.exists()) return;
     curPub = s.data();
     if (curPub.status === 'active' && document.getElementById('screen-waiting').style.display !== 'none') {
-      show('table'); // opponent just joined
+      show('table'); // another player just joined and filled the last seat
+    } else if (curPub.status === 'waiting') {
+      updateWaitingProgress(curPub);
     }
     maybeTurnStartDraw();
     render();
@@ -837,7 +869,6 @@ function isExpanded(o, p) { return expanded.has(o + '-' + p); }
 function render() {
   if (!curPub) return;
   const state = Net.reconstruct(curPub, myIndex, myCards);
-  const oppIndex = 1 - myIndex;
   const myTurn = isMyTurn();
 
   /* -- sound transitions -- */
@@ -879,11 +910,24 @@ function render() {
   document.getElementById('bufnote').textContent =
     state.completedPilesBuffer.length ? '  ·  set-aside ' + state.completedPilesBuffer.length : '';
 
-  renderZone(document.getElementById('zone-top'), state, oppIndex, false, myTurn);
+  renderOpponentZones(state, myTurn);
   renderZone(document.getElementById('zone-bottom'), state, myIndex, true, myTurn);
   renderBuilds(state, sel, myTurn);
   renderHand(state, myTurn);
   renderHint(state, sel, myTurn);
+}
+
+// One zone per other player (1 opponent in a 2-player game, up to 3 in a
+// 4-player game), rendered fresh into the #zones-opponents container each pass.
+function renderOpponentZones(state, myTurn) {
+  const wrap = document.getElementById('zones-opponents');
+  wrap.innerHTML = '';
+  state.players.forEach((p, i) => {
+    if (i === myIndex) return;
+    const div = document.createElement('div');
+    wrap.appendChild(div);
+    renderZone(div, state, i, false, myTurn);
+  });
 }
 
 function renderZone(container, state, playerIndex, isMe, myTurn) {
@@ -1060,14 +1104,6 @@ function updateDeckSummary() {
   document.getElementById('wilds-val').textContent = extraWilds;
   document.getElementById('deck-summary').textContent =
     numDecks + ' decks · ' + totalCards + ' cards · ' + wildCount + ' wild';
-
-  const note = document.getElementById('players-note');
-  if (playerCount > 2) {
-    note.style.display = '';
-    note.textContent = '3–4 player games are coming soon — this will create a 2-player game for now.';
-  } else {
-    note.style.display = 'none';
-  }
 }
 
 /* ---------- wiring ---------- */

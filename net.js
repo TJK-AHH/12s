@@ -16,15 +16,19 @@ const PLACEHOLDER = { placeholder: true, value: null, isWild: false };
 function clone(x) { return JSON.parse(JSON.stringify(x)); }
 
 /* Build a brand-new networked game (deck dealt, creator dealt a hand).
- * Status starts 'waiting' until the second player joins.
+ * Status starts 'waiting' until all seats are filled.
+ * numPlayers (2-4) sets how many total seats to create; only seat 0 (the
+ * creator) is bound to a uid here — the rest are open ('—') until joined.
  * deckConfig (optional) is the house-rules deck size: { numDecks, extraWilds }.
  * Returns { pub, myHand } — myHand is the creator's (player 0) hand. */
-function netCreate(creatorName, opponentName, deckConfig) {
-  const state = Engine.createGame([
-    { playerId: 'p0', displayName: creatorName },
-    { playerId: 'p1', displayName: opponentName || '—' },
-  ], null, deckConfig);
-  state.status = 'waiting';        // becomes 'active' when p1 joins
+function netCreate(creatorName, numPlayers, deckConfig) {
+  const n = numPlayers || 2;
+  const playerInfos = [];
+  for (let i = 0; i < n; i++) {
+    playerInfos.push({ playerId: 'p' + i, displayName: i === 0 ? creatorName : '—' });
+  }
+  const state = Engine.createGame(playerInfos, null, deckConfig);
+  state.status = 'waiting';        // becomes 'active' once every seat is filled
   state.drawnForTurn = state.turnNumber; // p0's opening draw is already done
   return { pub: serialize(state), myHand: clone(state.players[0].hand) };
 }

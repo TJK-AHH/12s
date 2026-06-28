@@ -1,8 +1,8 @@
 rules_version = '2';
 // 12s — Firestore security rules
-// Enforces: only the two players can touch their game, only the active player
-// can make a move, a waiting game is joinable by code, and each player's hand
-// is readable/writable only by that player.
+// Enforces: only the seated players (2-4) can touch their game, only the
+// active player can make a move, a waiting game is joinable by code (seats
+// fill in order), and each player's hand is readable/writable only by them.
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() {
@@ -20,21 +20,21 @@ service cloud.firestore {
       // prevents listing other people's or all 'waiting' games.
       allow list: if isSignedIn()
         && request.auth.uid in resource.data.playerUids;
-      // CREATE a new game: you are player 0, the only member, status 'waiting'.
+      // CREATE a new game: you are player 0, the only member, status 'waiting',
+      // and the table has 2-4 seats total.
       allow create: if isSignedIn()
         && request.resource.data.players[0].uid == request.auth.uid
         && request.resource.data.playerUids.size() == 1
         && request.auth.uid in request.resource.data.playerUids
-        && request.resource.data.status == 'waiting';
-      // UPDATE: either (a) joining a waiting game as player 1, or
-      //                (b) a move written by the current active player.
+        && request.resource.data.status == 'waiting'
+        && request.resource.data.players.size() >= 2
+        && request.resource.data.players.size() <= 4;
+      // UPDATE: either (a) joining a waiting game into the next open seat
+      //         (seats fill in order: p0 is the creator, then p1, p2, p3 as
+      //         people join — status only flips to 'active' once every seat
+      //         is filled), or (b) a move written by the current active player.
       allow update: if isSignedIn() && (
-        (
-          resource.data.status == 'waiting'
-          && request.resource.data.status == 'active'
-          && request.resource.data.players[1].uid == request.auth.uid
-          && request.resource.data.players[0].uid == resource.data.players[0].uid
-        )
+        joiningNextSeat()
         ||
         (
           request.auth.uid == resource.data.players[resource.data.currentTurnIndex].uid
@@ -43,15 +43,44 @@ service cloud.firestore {
       // No client-side deletes.
       allow delete: if false;
 
+      // The next open seat is always right after the currently-bound ones,
+      // since playerUids only ever holds bound uids, in seat order.
+      function joiningNextSeat() {
+        let slot = resource.data.playerUids.size();
+        return resource.data.status == 'waiting'
+          && slot < resource.data.players.size()
+          && resource.data.players[slot].uid == null
+          && request.resource.data.players[slot].uid == request.auth.uid
+          && request.resource.data.players[0].uid == resource.data.players[0].uid
+          && request.resource.data.players.size() == resource.data.players.size()
+          && request.resource.data.playerUids.size() == slot + 1
+          && request.resource.data.playerUids[slot] == request.auth.uid
+          && otherSeatsUnchanged(slot)
+          && ((request.resource.data.playerUids.size() == request.resource.data.players.size())
+              == (request.resource.data.status == 'active'));
+      }
+
+      // Every seat except the one being claimed must keep the same uid it had
+      // before this write (guards against a join write smuggling in changes
+      // to anyone else's seat). Guarded by size() so it never indexes past
+      // however many seats this particular game actually has (2, 3, or 4).
+      function otherSeatsUnchanged(slot) {
+        return (slot == 1 || resource.data.players.size() < 2 || resource.data.players[1].uid == request.resource.data.players[1].uid)
+            && (slot == 2 || resource.data.players.size() < 3 || resource.data.players[2].uid == request.resource.data.players[2].uid)
+            && (slot == 3 || resource.data.players.size() < 4 || resource.data.players[3].uid == request.resource.data.players[3].uid);
+      }
+
       // ---------- private hands ----------
       match /hands/{handId} {
         function gameData() {
           return get(/databases/$(database)/documents/games/$(gameId)).data;
         }
-        // Map the hand document id ('p0' / 'p1') to the uid bound to that slot.
+        // Map the hand document id ('p0'..'p3') to the uid bound to that slot.
         function ownerUid() {
           return handId == 'p0' ? gameData().players[0].uid
                : handId == 'p1' ? gameData().players[1].uid
+               : handId == 'p2' ? gameData().players[2].uid
+               : handId == 'p3' ? gameData().players[3].uid
                : '';
         }
         allow read, write: if isSignedIn()
