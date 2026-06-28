@@ -50,6 +50,31 @@
   .err { color: var(--danger); font-size: 13px; min-height: 18px; margin-top: 2px; }
   .or { text-align: center; color: var(--ink-soft); font-size: 12px; margin: 6px 0 14px; letter-spacing: .12em; }
 
+  .rules-toggle { display: flex; gap: 6px; margin-bottom: 12px; }
+  .rules-tab {
+    flex: 1; font-family: var(--font-body); font-weight: 600; font-size: 13px; color: var(--ink-soft);
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.14);
+    padding: 9px 10px; border-radius: 10px; cursor: pointer; transition: background .12s ease, color .12s ease;
+  }
+  .rules-tab.active { background: var(--glow); color: #06231a; border-color: transparent; }
+  #house-rules-panel { margin-bottom: 4px; }
+  .stepper-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .stepper-label { font-size: 13px; color: var(--paper); }
+  .stepper { display: flex; align-items: center; gap: 10px; }
+  .stepper-btn {
+    width: 30px; height: 30px; padding: 0; font-size: 16px; font-weight: 700; line-height: 1;
+    border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  }
+  .stepper-val { font-family: var(--font-display); font-weight: 700; font-size: 15px; min-width: 26px; text-align: center; }
+  .player-pick { display: flex; gap: 6px; }
+  .player-opt {
+    width: 34px; height: 30px; padding: 0; font-family: var(--font-display); font-weight: 700; font-size: 14px;
+    color: var(--ink-soft); border-radius: 8px;
+  }
+  .player-opt.active { background: var(--glow); color: #06231a; border-color: transparent; }
+  .deck-summary { color: var(--ink-soft); font-size: 12px; text-align: center; margin: 8px 0 4px; letter-spacing: .03em; }
+  .rules-note { color: var(--wild-a); font-size: 12px; text-align: center; margin: 4px 0 10px; line-height: 1.4; }
+
   button {
     font-family: var(--font-body); font-weight: 600; font-size: 14px; color: var(--paper);
     background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16);
@@ -251,6 +276,41 @@
     <h2>New game</h2>
     <label class="f" for="create-name">Your name</label>
     <input class="f" id="create-name" placeholder="e.g. Troy" maxlength="14" />
+
+    <div class="rules-toggle">
+      <button type="button" class="rules-tab active" id="tab-standard">Standard</button>
+      <button type="button" class="rules-tab" id="tab-house">House Rules</button>
+    </div>
+
+    <div id="house-rules-panel" style="display:none;">
+      <div class="stepper-row">
+        <span class="stepper-label">Decks</span>
+        <div class="stepper">
+          <button type="button" class="stepper-btn" id="decks-minus">–</button>
+          <span class="stepper-val" id="decks-val">20</span>
+          <button type="button" class="stepper-btn" id="decks-plus">+</button>
+        </div>
+      </div>
+      <div class="stepper-row">
+        <span class="stepper-label">Extra wild cards</span>
+        <div class="stepper">
+          <button type="button" class="stepper-btn" id="wilds-minus">–</button>
+          <span class="stepper-val" id="wilds-val">0</span>
+          <button type="button" class="stepper-btn" id="wilds-plus">+</button>
+        </div>
+      </div>
+      <div class="stepper-row">
+        <span class="stepper-label">Players</span>
+        <div class="player-pick">
+          <button type="button" class="player-opt active" data-players="2">2</button>
+          <button type="button" class="player-opt" data-players="3">3</button>
+          <button type="button" class="player-opt" data-players="4">4</button>
+        </div>
+      </div>
+      <div class="deck-summary" id="deck-summary">20 decks · 280 cards · 40 wild</div>
+      <div class="rules-note" id="players-note" style="display:none;"></div>
+    </div>
+
     <button class="primary" id="btn-create">Create game</button>
   </div>
 
@@ -378,6 +438,14 @@ let unsubChat = null;
 let chatOpen = false;
 let chatMessages = [];   // [{id, uid, name, text, ts}]
 let lastReadTs = 0;      // ms timestamp of last message seen
+
+// House rules (create-game screen) — numDecks/extraWilds feed the engine's
+// deckConfig; playerCount is captured now but 3-4 player games aren't wired
+// up yet, so creation still produces a standard 2-player game for now.
+let houseRulesOn = false;
+let numDecks = 20, extraWilds = 0, playerCount = 2;
+const MIN_DECKS = 20; // house rules only ADD decks on top of the standard 20
+const MIN_EXTRA_WILDS = 0;
 
 /* ---------- chat ---------- */
 const CHAT_READ_KEY = () => '12s.chatread.' + code;
@@ -595,9 +663,13 @@ async function createGame() {
   const name = (document.getElementById('create-name').value || 'Player 1').trim().slice(0, 14);
   lobbyErr('');
   const newCode = makeCode();
-  const created = Net.netCreate(name, '—');
+  const deckConfig = houseRulesOn ? { numDecks, extraWilds } : { numDecks: 20, extraWilds: 0 };
+  const created = Net.netCreate(name, '—', deckConfig);
   created.pub.players[0].uid = user.uid;          // bind creator to slot 0
   created.pub.playerUids = [user.uid];            // for finding this game by account
+  // Player count beyond 2 is captured for when 3-4 player support lands, but
+  // creation still produces a standard 2-player game for now.
+  created.pub.targetPlayerCount = houseRulesOn ? playerCount : 2;
   try {
     // Write the game doc FIRST (binds creator uid), then the hand doc — the
     // security rules verify hand ownership against the committed game doc.
@@ -973,6 +1045,31 @@ function leave() {
   clearIdentity(); show('lobby'); lobbyErr('');
 }
 
+/* ---------- house rules (create-game screen) ---------- */
+function setHouseRules(on) {
+  houseRulesOn = on;
+  document.getElementById('tab-standard').classList.toggle('active', !on);
+  document.getElementById('tab-house').classList.toggle('active', on);
+  document.getElementById('house-rules-panel').style.display = on ? '' : 'none';
+}
+
+function updateDeckSummary() {
+  const wildCount = numDecks * 2 + extraWilds;
+  const totalCards = numDecks * 12 + wildCount;
+  document.getElementById('decks-val').textContent = numDecks;
+  document.getElementById('wilds-val').textContent = extraWilds;
+  document.getElementById('deck-summary').textContent =
+    numDecks + ' decks · ' + totalCards + ' cards · ' + wildCount + ' wild';
+
+  const note = document.getElementById('players-note');
+  if (playerCount > 2) {
+    note.style.display = '';
+    note.textContent = '3–4 player games are coming soon — this will create a 2-player game for now.';
+  } else {
+    note.style.display = 'none';
+  }
+}
+
 /* ---------- wiring ---------- */
 document.getElementById('btn-create').onclick = createGame;
 document.getElementById('btn-join').onclick = joinGame;
@@ -991,6 +1088,20 @@ document.getElementById('btn-chat-send').onclick = sendChatMessage;
 document.getElementById('chat-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
 });
+document.getElementById('tab-standard').onclick = () => setHouseRules(false);
+document.getElementById('tab-house').onclick = () => setHouseRules(true);
+document.getElementById('decks-minus').onclick = () => { numDecks = Math.max(MIN_DECKS, numDecks - 1); updateDeckSummary(); };
+document.getElementById('decks-plus').onclick = () => { numDecks += 1; updateDeckSummary(); };
+document.getElementById('wilds-minus').onclick = () => { extraWilds = Math.max(MIN_EXTRA_WILDS, extraWilds - 1); updateDeckSummary(); };
+document.getElementById('wilds-plus').onclick = () => { extraWilds += 1; updateDeckSummary(); };
+document.querySelectorAll('.player-opt').forEach((btn) => {
+  btn.onclick = () => {
+    playerCount = parseInt(btn.dataset.players, 10);
+    document.querySelectorAll('.player-opt').forEach((b) => b.classList.toggle('active', b === btn));
+    updateDeckSummary();
+  };
+});
+updateDeckSummary();
 
 // Auto-fill join code from a shared ?game= link.
 const urlCode = new URLSearchParams(location.search).get('game');

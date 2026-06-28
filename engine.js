@@ -5,18 +5,22 @@
  * Everything operates on a plain `state` object so the same engine can drive
  * a local hot-seat version AND a Firestore-synced version later.
  *
- * Deck:   20 sets of 1-12 (240 cards) + 20 wilds = 260 cards
+ * Deck:   each "deck" = 12 numbered cards (1-12) + 2 wilds = 14 cards.
+ *         Standard game = 20 decks = 240 numbered + 40 wilds = 280 cards.
+ *         House rules may add decks (+14 cards each, same 12:2 ratio) and/or
+ *         extra wilds on top of that baseline.
  * Win:    first player to empty their 30-card stock pile wins
  * ==========================================================================*/
 
 /* ----------------------------------------------------------------------------
  * Constants
  * --------------------------------------------------------------------------*/
-const SETS = 20;          // copies of each numbered value
-const MAX_VALUE = 12;     // numbered cards run 1..12
-const WILD_COUNT = 20;    // number of wild cards in the deck
-const STOCK_SIZE = 30;    // cards dealt to each player's stock pile
-const HAND_SIZE = 5;      // a full hand
+const SETS = 20;           // standard number of decks
+const MAX_VALUE = 12;      // numbered cards run 1..12
+const WILDS_PER_DECK = 2;  // each deck contributes this many wilds
+const WILD_COUNT = SETS * WILDS_PER_DECK; // standard wild count (40)
+const STOCK_SIZE = 30;     // cards dealt to each player's stock pile
+const HAND_SIZE = 5;       // a full hand
 const MAX_BUILDING_PILES = 4;
 const DISCARD_PILES_PER_PLAYER = 4;
 
@@ -35,15 +39,19 @@ function makeCard(value, isWild) {
   };
 }
 
-// Build the full 260-card deck (unshuffled).
-function buildDeck() {
+// Build a deck (unshuffled). numDecks defaults to the standard 20; extraWilds
+// is added on top of the 2-per-deck baseline (so standard = 20*2 = 40 wilds).
+function buildDeck(numDecks, extraWilds) {
+  const decks = numDecks != null ? numDecks : SETS;
+  const extra = extraWilds != null ? extraWilds : 0;
   const deck = [];
-  for (let s = 0; s < SETS; s++) {
+  for (let s = 0; s < decks; s++) {
     for (let v = 1; v <= MAX_VALUE; v++) {
       deck.push(makeCard(v, false));
     }
   }
-  for (let w = 0; w < WILD_COUNT; w++) {
+  const totalWilds = decks * WILDS_PER_DECK + extra;
+  for (let w = 0; w < totalWilds; w++) {
     deck.push(makeCard(null, true));
   }
   return deck;
@@ -68,13 +76,20 @@ function shuffle(array, rng) {
  * Create a fresh game state.
  * @param {Array<{playerId:string, displayName:string}>} playerInfos  2-4 players
  * @param {function} [rng]  optional deterministic RNG for tests
+ * @param {{numDecks:number, extraWilds:number}} [deckConfig]  house-rule deck size;
+ *        defaults to the standard 20 decks / 0 extra wilds (280-card deck, 40 wild)
  */
-function createGame(playerInfos, rng) {
+function createGame(playerInfos, rng, deckConfig) {
   if (!playerInfos || playerInfos.length < 2 || playerInfos.length > 4) {
     throw new Error('Game requires 2 to 4 players.');
   }
 
-  let deck = shuffle(buildDeck(), rng);
+  const numDecks = (deckConfig && deckConfig.numDecks != null) ? deckConfig.numDecks : SETS;
+  const extraWilds = (deckConfig && deckConfig.extraWilds != null) ? deckConfig.extraWilds : 0;
+  const wildCount = numDecks * WILDS_PER_DECK + extraWilds;
+
+  let deck = shuffle(buildDeck(numDecks, extraWilds), rng);
+  const totalCards = deck.length; // before dealing stocks off the top
 
   const players = playerInfos.map((info) => {
     const stockPile = deck.splice(0, STOCK_SIZE); // deal 30 off the top
@@ -96,6 +111,7 @@ function createGame(playerInfos, rng) {
     completedPilesBuffer: [],          // cards from finished 12-piles, set aside
     buildingPiles: [null, null, null, null], // 4 center slots; null = empty
     winnerPlayerId: null,
+    deckConfig: { numDecks, extraWilds, wildCount, totalCards }, // house rules used
   };
 
   // Active player draws up to 5 to begin.
@@ -327,7 +343,7 @@ function hasAnyLegalPlay(state) {
  * --------------------------------------------------------------------------*/
 const ENGINE = {
   // constants
-  SETS, MAX_VALUE, WILD_COUNT, STOCK_SIZE, HAND_SIZE,
+  SETS, MAX_VALUE, WILD_COUNT, WILDS_PER_DECK, STOCK_SIZE, HAND_SIZE,
   MAX_BUILDING_PILES, DISCARD_PILES_PER_PLAYER,
   // setup
   buildDeck, shuffle, createGame,

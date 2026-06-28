@@ -17,12 +17,13 @@ function clone(x) { return JSON.parse(JSON.stringify(x)); }
 
 /* Build a brand-new networked game (deck dealt, creator dealt a hand).
  * Status starts 'waiting' until the second player joins.
+ * deckConfig (optional) is the house-rules deck size: { numDecks, extraWilds }.
  * Returns { pub, myHand } — myHand is the creator's (player 0) hand. */
-function netCreate(creatorName, opponentName) {
+function netCreate(creatorName, opponentName, deckConfig) {
   const state = Engine.createGame([
     { playerId: 'p0', displayName: creatorName },
     { playerId: 'p1', displayName: opponentName || '—' },
-  ]);
+  ], null, deckConfig);
   state.status = 'waiting';        // becomes 'active' when p1 joins
   state.drawnForTurn = state.turnNumber; // p0's opening draw is already done
   return { pub: serialize(state), myHand: clone(state.players[0].hand) };
@@ -43,6 +44,8 @@ function serialize(state) {
     winnerPlayerId: state.winnerPlayerId != null ? state.winnerPlayerId : null,
     // Preserve the auth binding so a full set() doesn't wipe it.
     playerUids: state.playerUids != null ? clone(state.playerUids) : null,
+    // House-rules deck size actually used (numDecks, extraWilds, wildCount, totalCards).
+    deckConfig: state.deckConfig != null ? clone(state.deckConfig) : null,
     players: state.players.map((p) => ({
       playerId: p.playerId,
       displayName: p.displayName,
@@ -70,6 +73,7 @@ function reconstruct(pub, myIndex, myCards) {
     buildingPiles: clone(pub.buildingPiles),
     winnerPlayerId: pub.winnerPlayerId,
     playerUids: pub.playerUids != null ? clone(pub.playerUids) : null,
+    deckConfig: pub.deckConfig != null ? clone(pub.deckConfig) : null,
     players: pub.players.map((p, i) => ({
       playerId: p.playerId,
       displayName: p.displayName,
